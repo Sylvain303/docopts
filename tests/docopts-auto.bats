@@ -18,7 +18,6 @@ EOF
 	echo $tmp
 }
 
-
 @test "docopt_auto_parse internal" {
     # internal
     source ../docopts.sh
@@ -40,12 +39,19 @@ EOF
 	rm $tmp
 }
 
+@test "docopt_get_embedded_python" {
+    source ../docopts.sh
+    run docopt_get_embedded_python
+    [[ ${#lines[@]} -gt 100 ]]
+    [[ "${lines[0]}" =~ python ]]
+}
+
 @test "docopt_auto_parse external" {
     mktmp
     [[ -f $tmp ]]
     chmod a+x $tmp
     run $tmp prout
-    # echo "$output" >> log
+    echo "$output" >> log
     [[ "$output" == prout ]]
     rm $tmp
 }
