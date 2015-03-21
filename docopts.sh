@@ -22,71 +22,6 @@ docopt_get_help_string() {
     sed -n -e '/^# Usage:/,/^$/ s/^# \?//p' < $myfname
 }
 
-# function wrapper
-# Usage: same as docopts.py
-docopt() {
-    #   docopts [options] -h <msg> : [<argv>...]
-    # call python parser on embedded code
-    python <(docopt_get_embedded_python) "$@"
-}
-
-# convert a repeatable option parsed by docopts.py into a bash ARRAY
-# Usage: myarray=( $(docopt_get_values args --repeatable-option") )
-docopt_get_values() {
-    local opt=$2
-    local ref="\${$1[$opt,#]}"
-    local nb_val=$(eval echo "$ref")
-    local i=0
-    local vars=""
-    while [[ $i -lt $nb_val ]] ; do
-        ref="\${$1[$opt,$i]}"
-        eval "vars+=\" $ref\""
-        i=$(($i + 1))
-    done
-    echo $vars
-}
-
-# echo evaluable code to get alls the values into a bash array
-# Usage: eval "$(docopt_get_eval_array args FILE myarray)"
-docopt_get_eval_array() {
-    local ref="\${$1[$2,#]}"
-    local nb_val=$(eval echo "$ref")
-    local i=0
-    local vars=""
-    echo "declare -a $3"
-    while [[ $i -lt $nb_val ]] ; do
-        ref="\${$1[$2,$i]}"
-        eval "echo \"$3+=( '$ref' )\""
-        i=$(($i + 1))
-    done
-}
-
-# Auto parser for same docopts usage over script, or lazyness.
-# use this convention:
-#  - help string in: $help
-#  - Usage parse by docopt_get_help_string at beginning of the script
-#  - arguments evaluated at global level in: $args
-#  - no version information
-#  
-docopt_auto_parse() {
-    local script_fname=$1
-    shift
-    help="$(docopt_get_help_string "$script_fname")"
-    # $args assoc array must be declared outside on this function
-    # or it's scope will be local
-    docopt -A args -h "$help" : "$@" | grep -v -- 'declare -A args'
-}
-
-## main code
-# --auto : don't forget to pass $@
-# Usage: source docopts.sh --auto "$@"
-if [[ "$1" == "--auto" ]] ; then
-    shift
-    declare -A args
-    eval "$(docopt_auto_parse "${BASH_SOURCE[1]}" "$@")"
-fi
-
-
 docopt_get_embedded_python() {
     # don't alter this code, this is the original python docopts + docopt.py
     ### EMBEDDED
@@ -840,3 +775,69 @@ else:
         print("%s=%s" % (var, value))
 __EMBEDEOF__
 }
+
+# function wrapper
+# Usage: same as docopts.py
+docopt() {
+    #   docopts [options] -h <msg> : [<argv>...]
+    # call python parser on embedded code
+    python <(docopt_get_embedded_python) "$@"
+}
+
+# convert a repeatable option parsed by docopts.py into a bash ARRAY
+# Usage: myarray=( $(docopt_get_values args --repeatable-option") )
+docopt_get_values() {
+    local opt=$2
+    local ref="\${$1[$opt,#]}"
+    local nb_val=$(eval echo "$ref")
+    local i=0
+    local vars=""
+    while [[ $i -lt $nb_val ]] ; do
+        ref="\${$1[$opt,$i]}"
+        eval "vars+=\" $ref\""
+        i=$(($i + 1))
+    done
+    echo $vars
+}
+
+# echo evaluable code to get alls the values into a bash array
+# Usage: eval "$(docopt_get_eval_array args FILE myarray)"
+docopt_get_eval_array() {
+    local ref="\${$1[$2,#]}"
+    local nb_val=$(eval echo "$ref")
+    local i=0
+    local vars=""
+    echo "declare -a $3"
+    while [[ $i -lt $nb_val ]] ; do
+        ref="\${$1[$2,$i]}"
+        eval "echo \"$3+=( '$ref' )\""
+        i=$(($i + 1))
+    done
+}
+
+# Auto parser for same docopts usage over script, or lazyness.
+# use this convention:
+#  - help string in: $help
+#  - Usage parse by docopt_get_help_string at beginning of the script
+#  - arguments evaluated at global level in: $args
+#  - no version information
+#  
+docopt_auto_parse() {
+    local script_fname=$1
+    shift
+    help="$(docopt_get_help_string "$script_fname")"
+    # $args assoc array must be declared outside on this function
+    # or it's scope will be local
+    docopt -A args -h "$help" : "$@" | grep -v -- 'declare -A args'
+}
+
+## main code : must be executed after all functions are sourced
+# --auto : don't forget to pass $@
+# Usage: source docopts.sh --auto "$@"
+if [[ "$1" == "--auto" ]] ; then
+    shift
+    declare -A args
+    eval "$(docopt_auto_parse "${BASH_SOURCE[1]}" "$@")"
+fi
+
+
