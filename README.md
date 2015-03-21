@@ -6,7 +6,7 @@ The [develop branch](https://github.com/docopt/docopts/tree/develop) is abandone
 ## docopts
 
 See the Reference manual for command line `docopts` (old
-[README.rst](https://github.com/docopt/docopts/blob/master/old_README.rst))
+[README.rst](old_README.rst))
 
 ## Features
 
@@ -19,7 +19,7 @@ and source it.
 
 Of course, it needs a python interperter in the $PATH.
 
-See examples/ for details.
+See [examples/](examples) for details.
 
 ## Developpers
 
