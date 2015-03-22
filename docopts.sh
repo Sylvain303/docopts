@@ -80,11 +80,14 @@ docopt_auto_parse() {
 ## main code
 # --auto : don't forget to pass $@
 # Usage: source docopts.sh --auto "$@"
-if [[ "$1" == "--auto" ]] ; then
-    shift
-    declare -A args
-    eval "$(docopt_auto_parse "${BASH_SOURCE[1]}" "$@")"
-fi
+
+main() {
+    if [[ "$1" == "--auto" ]] ; then
+        shift
+        declare -A args
+        eval "$(docopt_auto_parse "${BASH_SOURCE[1]}" "$@")"
+    fi
+}
 
 
 docopt_get_embedded_python() {
@@ -840,3 +843,5 @@ else:
         print("%s=%s" % (var, value))
 __EMBEDEOF__
 }
+
+main "$0"
