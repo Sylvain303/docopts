@@ -18,7 +18,7 @@ import (
     "encoding/json"
 )
 
-var Version string = `docopts 0.6.4
+var Version string = `docopts 0.6.4 - with JSON support
 Copyleft (Ɔ) 2018 Sylvain Viart (golang version).
 Copyright (C) 2013 Vladimir Keleshev, Lari Rasku.
 License MIT <http://opensource.org/licenses/MIT>.
@@ -30,7 +30,7 @@ var Usage string = `Shell interface for docopt, the CLI description language.
 
 Usage:
   docopts [options] -h <msg> : [<argv>...]
-  docopts [options] [-d] [--no-declare] -A <name>   -h <msg> : [<argv>...]
+  docopts [options] [--no-declare] -A <name>   -h <msg> : [<argv>...]
   docopts [options] -G <prefix>  -h <msg> : [<argv>...]
   docopts [options] --no-mangle  -h <msg> : [<argv>...]
   docopts [options] parse <msg> : [<argv>...]
@@ -129,6 +129,11 @@ type Docopts struct {
     Json string
 }
 
+func (d* Docopts) debug_print_Docopts() {
+    fmt.Printf("Docopts: %+v\n", d)
+
+}
+
 // output bash 4 compatible assoc array, suitable for eval.
 func (d *Docopts) Print_bash_assoc(bash_assoc string, args docopt.Opts) {
     // Reuse python's fake nested Bash arrays for repeatable arguments with values.
@@ -157,6 +162,34 @@ func (d *Docopts) Print_bash_assoc(bash_assoc string, args docopt.Opts) {
             // value is not an array
             fmt.Fprintf(out, "%s['%s']=%s\n", bash_assoc, Shellquote(key), To_bash(value))
         }
+    }
+}
+
+func (d *Docopts) Print_value(key string) {
+    var parsed_args docopt.Opts
+    if len(d.Json) > 0 {
+        json.Unmarshal([]byte(d.Json), &parsed_args)
+        fmt.Fprintf(out, "%s\n", To_bash(parsed_args[key]))
+    } else {
+        docopts_error(fmt.Sprintf("get '%s' DOCOPTS_JSON is empty", key), nil)
+
+    }
+}
+
+func (d *Docopts) Print_keys() {
+    var parsed_args docopt.Opts
+    if len(d.Json) > 0 {
+        json.Unmarshal([]byte(d.Json), &parsed_args)
+        i := 0
+        for k, _ := range parsed_args {
+            if i > 0 {
+                fmt.Fprintf(out, " ")
+            }
+            fmt.Fprintf(out, "%s", k)
+            i++
+        }
+    } else {
+        docopts_error("get-keys: DOCOPTS_JSON is empty", nil)
     }
 }
 
@@ -439,7 +472,7 @@ func main() {
     }
 
     // mode parse read from another arg
-    if doc == "" {
+    if doc == "" && arguments["parse"].(bool) {
         doc, err = arguments.String("<msg>")
         if err != nil {
             panic(err)
@@ -450,6 +483,21 @@ func main() {
         fmt.Printf("%20s : %v\n", "doc", doc)
         fmt.Printf("%20s : %v\n", "bash_version", bash_version)
     }
+
+    if arguments["get"].(bool) {
+        d.Print_value(arguments["<arg_name>"].(string))
+        os.Exit(0)
+    }
+
+    if arguments["get-keys"].(bool) {
+        // From DOCOPTS_JSON
+        d.Print_keys()
+        os.Exit(0)
+    }
+	// ================================================================================
+	// need to parse arguments after this point
+	// ================================================================================
+
 
     // now parses bash program's arguments
     parser := &docopt.Parser{

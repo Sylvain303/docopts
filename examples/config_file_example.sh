@@ -45,9 +45,10 @@ pprint_bash() {
 # main code
 # = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = =
 
-# DOCOPTS_JSON is the default variable you need to set with docopts parsed output
-# you can change the variable's name See: --env
-DOCOPTS_JSON=$(docopts auto-parse --json "$0" --version '0.1.1rc' : "$@")
+# DOCOPTS_JSON is the default variable you need to set with docopts parsed output.
+# You can change the variable's name See: --env
+# In all case you need to export it once, so it will become available to docopts.
+export DOCOPTS_JSON=$(docopts auto-parse --json "$0" --version '0.1.1rc' : "$@")
 # parse failure or help display
 [[ $? -ne 0 ]] && eval $(docopts fail)
 
