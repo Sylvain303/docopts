@@ -1,80 +1,70 @@
-# A new shell API is proposed
+# docopts with JSON support
 
+This branch is implementing JSON support in ’docopts’
 See Proposal lib API: [on `docopts` Wiki](https://github.com/docopt/docopts/wiki)
 
-The [develop branch](https://github.com/docopt/docopts/tree/develop) is abandoned!
+See: current go version is [100% compatible with python's docopts](https://github.com/Sylvain303/docopts/tree/docopts-go).
 
-The current go version is 100% compatible with python's docopts.
 Please report any non working code with [issue](https://github.com/docopt/docopts/issues) and examples.
 
 ## docopts
 
-Status: Alpha - work is done
+Status: Draft - work in progress
 
 This is the golang version  of `docopts` : the command line wrapper for bash.
 
-See the Reference manual for command line `docopts` (old
-[README.rst](old_README.rst))
-
-## Install
-
-You have to drop the binary, and eventually the `docopts.sh` lib helper in your PATH.
-The binary is standalone and staticaly linked. So it runs everywhere.
-
-See build section.
-
-next as root
-
-```
-cp docopts docopts.sh /usr/local/bin
-```
-
-TODO: upload pre-built binary to release to they could be fetched directly
-
 ## Usage
 
-See manual and [Examples](examples/)
+See [Examples](examples/)
 
-## Compiling
+Date: 2018-06-01
 
-With go workspace.
+See: [`config_file_example.sh`](examples/config_file_example.sh) for a detailed prototype code.
 
-cross compile for 32btis
+We propose to embed JSON support into `docopts` (single binary, no need to extra `jq` for handling
+JSON in bash.
+
+The idea is to store arguments parsed result into a shell env variable, and to reuse it by
+`docopts` sub-call with action expecting this variable to be filled with JSON output.
+
+### Usage examples
+
+```bash
+DOCOPTS_JSON=$(docopts --json --h "Usage: mystuff [--code] INFILE [--out=OUTFILE]" : "$@")
+
+# automaticly use $DOCOPTS_JSON
+if [[ $(docopts get --code) == checkit ]]
+then
+  action
+fi
 ```
-env GOOS=linux GOARCH=386 go build docopts.go
+
+The var name could be explicitly set to any user need (instead of default `DOCOPTS_JSON`):
+
+```bash
+docopts --env SOME_DOCOPTS_JSON get --code
+
+# or using an env var naming the env var...
+DOCOPTS_JSON_VAR=SOME_DOCOPTS_JSON
+docopts get --code
 ```
 
-local build
+### parse failure detection and reaction inside bash code:
+
+* On parse success, the JSON is filled as expected => exit 0 (`DOCOPTS_JSON` is filled with parsed options)
+* if -h is given, exit code is 42 and questions need to be answered (`DOCOPTS_JSON` is filled with help message)
+* else exit 1 => some argument parsing error (`DOCOPTS_JSON` is filled with error message)
+
+`DOCOPTS_JSON` also contains exit code for the caller if necessary.
+
+```bash
+DOCOPTS_JSON=$(docopts --json --auto-parse "$0" --version '0.1.1rc' : "$@")
+# docopts fail : display error stored in DOCOPTS_JSON and output exit code for
+# caller
+[[ $? -ne 0 ]] && eval $(docopts fail)
 ```
-go get github.com/Sylvain303/docopts
-cd src/github.com/Sylvain303/docopts
-go build docopts.go
-```
-
-Tested built on: `go version go1.10.2 linux/amd64`
-
-## Features
-
-Warning: may be not up-to-date feature list.
-
-The command line tools `docopts` was written in python. It is unmaintained.
-A new shell lib has been added [`docopts.sh`](docopts.sh).
-
-The `docopts.sh` is an extra bash library that you can source in your CLI script.
-This library provides some bash helpers and is not required in order to use docopts.
-
-You don't need a python interpreter anymore.
-
-As of 2018-05-22
-
-* `docopts` is able to reproduce 100% of the python version.
-* Language agnostic test is 100% (on adm64 Linux)
-* unit test for go, hack as you wish.
-* 100% `language_agnostic_tester.py` passed
 
 ## Developpers
-
-All python related stuff has been removed, excepted `language_agnostic_tester.py`.
 
 If you want to clone this repository and hack docopts:
 
@@ -82,7 +72,7 @@ Use `git clone --recursive`, to get submodules only required for testing with `b
 
 Fetch the extra golang version of `docopt` (required for building `docopts`)
 
-```
+```bash
 go get github.com/docopt/docopt-go
 ```
 
@@ -91,37 +81,6 @@ If you forgot `--recursive`, you can also run afterward:
 ~~~bash
 git submodule init
 git submodule update
-~~~
-
-Current folder structure:
-
-~~~
-.
-├── API_proposal.md - compatibility link to the proposed API.
-├── build.sh - no more used yet
-├── docopts.go - main source code
-├── docopts.sh - library wrapper and helpers
-├── examples - all examples are working
-│   ├── calculator_example.sh
-│   ├── cat-n_wrapper_example.sh
-│   ├── docopts_auto_example.sh
-│   ├── quick_example.sh
-│   └── rock_stdin_example.sh
-├── language_agnostic_tester.py - old python JSON tester still used with testee.sh
-├── LICENSE-MIT
-├── old_README.rst - copied README
-├── PROGRESS.mda - what I'm working on
-├── README.md
-├── testcases.docopt - agnostic testcases copied from python's docopt
-├── testee.sh - bash wrapper to convert docopts output to JSON
-├── tests - unit and functional testing written in bats
-│   ├── bats [...]
-│   ├── bats.alias
-│   ├── docopts-auto.bats
-│   ├── docopts.bats
-│   ├── exit_handler.sh
-│   └── TODO.md
-└── TODO.md - Some todo list on this golang version of docopts
 ~~~
 
 ## Tests
@@ -142,7 +101,7 @@ cd ./tests
 bats .
 ```
 
-#### language_agnostic_tester
+#### `language_agnostic_tester`
 
 ```
 python language_agnostic_tester.py ./testee.sh

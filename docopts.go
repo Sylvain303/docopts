@@ -1,6 +1,7 @@
 // vim: set ts=4 sw=4 sts=4 et:
 //
 // docopts.go is a command line wrapper for docopt.go to be used by bash scripts.
+// docopt - command line arguments parser, that will make you smile.
 //
 package main
 
@@ -14,11 +15,12 @@ import (
     "io"
     "io/ioutil"
     "sort"
+    "encoding/json"
 )
 
-var Version string = `docopts 0.6.3
-Copyright (C) 2013 Vladimir Keleshev, Lari Rasku.
+var Version string = `docopts 0.6.4
 Copyleft (Ɔ) 2018 Sylvain Viart (golang version).
+Copyright (C) 2013 Vladimir Keleshev, Lari Rasku.
 License MIT <http://opensource.org/licenses/MIT>.
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.
@@ -28,9 +30,26 @@ var Usage string = `Shell interface for docopt, the CLI description language.
 
 Usage:
   docopts [options] -h <msg> : [<argv>...]
-  docopts [options] [--no-declare] -A <name>   -h <msg> : [<argv>...]
+  docopts [options] [-d] [--no-declare] -A <name>   -h <msg> : [<argv>...]
   docopts [options] -G <prefix>  -h <msg> : [<argv>...]
   docopts [options] --no-mangle  -h <msg> : [<argv>...]
+  docopts [options] parse <msg> : [<argv>...]
+  docopts [options] get <arg_name>
+  docopts [options] get-keys
+  docopts [options] auto-parse [--json|-A <name>|-G <prefix>] <bash_script> : [<argv>...]
+  docopts [options] merge (ini|json)  <config_file>
+  docopts [options] dump  (ini|json)
+  docopts --howto
+
+Actions:
+  parse          Parse and outputs JSON result (shortcut for --json -h).
+  auto-parse     Auto parse <bash_script> header and outputs parsed result.
+  get            With DOCOPTS_JSON, get the value of <arg_name>
+  fail           With DOCOPTS_JSON, set output the bash code with
+                 error message, suitable for eval.
+  merge          With DOCOPTS_JSON, output a new merge JSON reading
+                 from ini file format or json file format.
+  get-keys       With DOCOPTS_JSON, get all keys from JSON.
 
 Options:
   -h <msg>, --help=<msg>        The help message in docopt format.
@@ -65,6 +84,8 @@ Options:
                                 Rvalue is still shellquoted.
   --no-declare                  Don't output 'declare -A <name>', used only
                                 with -A argument.
+  --json                        Change output format to JSON. Activated
+                                automaticaly for 'parse' action.
   --debug                       Output extra parsing information for debuging.
                                 Output cannot be used in bash eval.
 `
@@ -72,6 +93,15 @@ Options:
 // testing trick, out can be mocked to catch stdout and validate
 // https://stackoverflow.com/questions/34462355/how-to-deal-with-the-fmt-golang-library-package-for-cli-testing
 var out io.Writer = os.Stdout
+
+type DumpType uint
+
+const (
+    F_Json DumpType = 1 << iota
+    F_Ini
+    F_Bash_assoc
+    F_Bash_global
+)
 
 // debug helper
 func print_args(args docopt.Opts, message string) {
@@ -95,10 +125,12 @@ type Docopts struct {
     Mangle_key bool
     Output_declare bool
     Exit_function bool
+    Format DumpType
+    Json string
 }
 
 // output bash 4 compatible assoc array, suitable for eval.
-func (d *Docopts) Print_bash_args(bash_assoc string, args docopt.Opts) {
+func (d *Docopts) Print_bash_assoc(bash_assoc string, args docopt.Opts) {
     // Reuse python's fake nested Bash arrays for repeatable arguments with values.
     // The structure is:
     // bash_assoc[key,#]=length
@@ -326,6 +358,19 @@ func docopts_error(msg string, err error) {
     os.Exit(1)
 }
 
+func (d* Docopts) Dump(arguments docopt.Opts) {
+    switch(d.Format) {
+    case F_Json:
+        b, err := json.Marshal(arguments)
+        if err != nil {
+            docopts_error("dump json: %v", err)
+        }
+        out.Write(b)
+    case F_Ini:
+        fmt.Fprintf(out, "ini dump not supported yet")
+    }
+}
+
 func main() {
     golang_parser := &docopt.Parser{
       OptionsFirst: true,
@@ -333,10 +378,10 @@ func main() {
       HelpHandler: HelpHandler_golang,
     }
 
-    arguments, err := golang_parser.ParseArgs(Usage, nil, Version)
+    arguments, err_parse := golang_parser.ParseArgs(Usage, nil, Version)
 
-    if err != nil {
-        msg := fmt.Sprintf("mypanic: %v\n", err)
+    if err_parse != nil {
+        msg := fmt.Sprintf("mypanic: %v\n", err_parse)
         panic(msg)
     }
 
@@ -352,46 +397,55 @@ func main() {
         Output_declare: true,
         // Exit_function is experimental
         Exit_function: false,
+        Format: F_Json,
+        Json:  os.Getenv("DOCOPTS_JSON"),
     }
 
     // parse docopts's own arguments
     argv := arguments["<argv>"].([]string)
-    doc := arguments["--help"].(string)
-    bash_version, _ := arguments.String("--version")
     options_first := arguments["--options-first"].(bool)
     no_help :=  arguments["--no-help"].(bool)
     separator := arguments["--separator"].(string)
-    d.Mangle_key = ! arguments["--no-mangle"].(bool)
-    d.Output_declare = ! arguments["--no-declare"].(bool)
-    global_prefix, err := arguments.String("-G")
-    if err == nil {
-        d.Global_prefix = global_prefix
-    }
 
-    // read from stdin
-    if doc == "-" && bash_version == "-" {
-        bytes, _ := ioutil.ReadAll(os.Stdin)
-        arr := strings.Split(string(bytes), separator)
-        if len(arr) == 2 {
-            doc, bash_version = arr[0], arr[1]
-        } else {
-            msg := "error: help + version stdin, not found"
-            if debug {
-                msg += fmt.Sprintf("\nseparator is: '%s'\n", separator)
-                msg += fmt.Sprintf("spliting has given %d blocs, exactly 2 are expected\n", len(arr))
+    var doc string
+    var err error
+    // bash_version will be empty if error, so we dont care
+    bash_version, _ := arguments.String("--version")
+
+    if doc, err = arguments.String("--help"); err != nil {
+        // read from stdin
+        if doc == "-" && bash_version == "-" {
+            bytes, _ := ioutil.ReadAll(os.Stdin)
+            arr := strings.Split(string(bytes), separator)
+            if len(arr) == 2 {
+                doc, bash_version = arr[0], arr[1]
+            } else {
+                msg := "error: help + version stdin, not found"
+                if debug {
+                    msg += fmt.Sprintf("\nseparator is: '%s'\n", separator)
+                    msg += fmt.Sprintf("spliting has given %d blocs, exactly 2 are expected\n", len(arr))
+                }
+                panic(msg)
             }
-            panic(msg)
+        } else if doc == "-" {
+            bytes, _ := ioutil.ReadAll(os.Stdin)
+            doc = string(bytes)
+        } else if bash_version == "-" {
+            bytes, _ := ioutil.ReadAll(os.Stdin)
+            bash_version = string(bytes)
         }
-    } else if doc == "-" {
-        bytes, _ := ioutil.ReadAll(os.Stdin)
-        doc = string(bytes)
-    } else if bash_version == "-" {
-        bytes, _ := ioutil.ReadAll(os.Stdin)
-        bash_version = string(bytes)
+        doc = strings.TrimSpace(doc)
+        bash_version = strings.TrimSpace(bash_version)
     }
 
-    doc = strings.TrimSpace(doc)
-    bash_version = strings.TrimSpace(bash_version)
+    // mode parse read from another arg
+    if doc == "" {
+        doc, err = arguments.String("<msg>")
+        if err != nil {
+            panic(err)
+        }
+    }
+
     if debug {
         fmt.Printf("%20s : %v\n", "doc", doc)
         fmt.Printf("%20s : %v\n", "bash_version", bash_version)
@@ -403,23 +457,54 @@ func main() {
       OptionsFirst: options_first,
       SkipHelpFlags: no_help,
     }
-    bash_args, err := parser.ParseArgs(doc, argv, bash_version)
-    if err == nil {
-        if debug {
-            print_args(bash_args, "bash")
-            fmt.Println("----------------------------------------")
-        }
-        name, err := arguments.String("-A")
-        if err == nil {
-            if ! IsBashIdentifier(name) {
-                fmt.Printf("-A: not a valid Bash identifier: '%s'", name)
-                return
-            }
-            d.Print_bash_args(name, bash_args)
-        } else {
-            d.Print_bash_global(bash_args)
-        }
-    } else {
-        panic(err)
+
+    bash_args, err_parse_bash := parser.ParseArgs(doc, argv, bash_version)
+    if err_parse_bash != nil {
+        panic(err_parse_bash)
     }
+
+    // ========================================
+    // main action code
+    // ========================================
+
+    if debug {
+        print_args(bash_args, "bash")
+        fmt.Println("----------------------------------------")
+    }
+
+    if arguments["dump"].(bool) {
+        if arguments["json"].(bool) {
+            d.Format = F_Json
+        } else if arguments["ini"].(bool) {
+            d.Format = F_Ini
+        }
+        d.Dump(bash_args)
+        os.Exit(0)
+    }
+
+    // outputer
+
+    if name, err := arguments.String("-A"); err == nil {
+        if ! IsBashIdentifier(name) {
+            docopts_error("-A switch:%v", fmt.Errorf("not a valid Bash identifier: '%s'", name))
+        }
+        d.Format = F_Bash_assoc
+        d.Output_declare = ! arguments["--no-declare"].(bool)
+        d.Print_bash_assoc(name, bash_args)
+    }
+
+    if arguments["parse"].(bool) {
+        // force option
+        d.Format = F_Json
+        d.Dump(bash_args)
+    } else {
+        d.Format = F_Bash_global
+        d.Mangle_key = ! arguments["--no-mangle"].(bool)
+        if global_prefix, err := arguments.String("-G"); err == nil {
+            d.Global_prefix = global_prefix
+        }
+        d.Print_bash_global(bash_args)
+    }
+
+    os.Exit(0)
 }

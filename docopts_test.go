@@ -81,7 +81,7 @@ func TestIsArray(t *testing.T) {
     }
 }
 
-func TestPrint_bash_args(t *testing.T) {
+func TestPrint_bash_assoc(t *testing.T) {
     // replace out (os.Stdout) by a buffer
     bak := out
     out = new(bytes.Buffer)
@@ -132,11 +132,11 @@ func TestPrint_bash_args(t *testing.T) {
 
     tables, _ := test_json_loader.Load_json("./common_input_test.json")
     for _, table := range tables {
-        d.Print_bash_args("args", table.Input)
+        d.Print_bash_assoc("args", table.Input)
         res := out.(*bytes.Buffer).String()
         expect := strings.Join(table.Expect_args[:],"\n") + "\n"
         if res != expect {
-           t.Errorf("Print_bash_args for '%v'\ngot: '%v'\nwant: '%v'\n", table.Input, res, expect)
+           t.Errorf("Print_bash_assoc for '%v'\ngot: '%v'\nwant: '%v'\n", table.Input, res, expect)
         }
         out.(*bytes.Buffer).Reset()
     }
@@ -322,5 +322,59 @@ func TestName_mangle(t *testing.T) {
         if res != table.expect.s {
            t.Errorf("Name_mangle for '%v'\ngot: '%v'\nwant: '%v'\n", table.input, res, table.expect.s)
         }
+    }
+}
+
+func TestDump(t *testing.T) {
+    // replace out (os.Stdout) by a buffer
+    bak := out
+    out = new(bytes.Buffer)
+    defer func() { out = bak }()
+
+    tables := []struct{
+        input map[string]interface{}
+        expect string
+    }{
+       {
+         map[string]interface{}{ "FILE" : []string{"pipo", "molo", "toto"} },
+         `{"FILE":["pipo","molo","toto"]}`,
+       },
+       {
+         map[string]interface{}{ "--counter" : 2 },
+         `{"--counter":2}`,
+       },
+       {
+         map[string]interface{}{ "--counter" : "2" },
+         `{"--counter":"2"}`,
+       },
+       {
+         map[string]interface{}{ "bool" : true },
+         `{"bool":true}`,
+       },
+       //{
+       //  map[string]interface{}{
+       //    "bool" : true,
+       //    "FILE" : []string{"pipo", "molo", "toto"},
+       //    "--counter1" : 2,
+       //    "--counter" : "2",
+       //  },
+       //  `{"bool":true,"FILE":["pipo","molo","toto"],"--counter1":2},"--counter":"2"}`,
+       //},
+    }
+
+    d := &Docopts{
+        Global_prefix: "",
+        Mangle_key: true,
+        Output_declare: true,
+        Format: F_Json,
+    }
+
+    for _, table := range tables {
+        d.Dump(table.input)
+        res := out.(*bytes.Buffer).String()
+        if res != table.expect {
+           t.Errorf("Dump json for '%v'\ngot : '%v'\nwant: '%v'\n", table.input, res, table.expect)
+        }
+        out.(*bytes.Buffer).Reset()
     }
 }
