@@ -13,11 +13,43 @@ Status: Draft - work in progress
 
 This is the golang version  of `docopts` : the command line wrapper for bash.
 
+## Install
+
+```
+go get github.com/docopt/docopt-go
+go get github.com/Sylvain303/docopts
+cd src/github.com/Sylvain303/docopts
+go build docopts.go
+```
+
+or via Makefile (generate 64bits, 32bits, arm and OSX-64bits version of docopts)
+
+```
+cd src/github.com/Sylvain303/docopts
+make all
+```
+
+Tested built on: `go version go1.10.2 linux/amd64`
+
+The var name could be explicitly set to any user need (instead of default `DOCOPTS_JSON`):
+
+### pre-built binary
+
+pre-built binary are attached to [releases](https://github.com/Sylvain303/docopts/releases)
+
+download and rename it as `docopts` and put in your `PATH`
+
+```
+mv docopts-32bit docopts
+cp docopts docopts.sh /usr/local/bin
+```
+
+You are strongly encouraged to build your own binary. Find a local golang developper in whom you trust and ask her, for a beer or two, if she could build it for you. ;)
+
 ## Usage
 
 See [Examples](examples/)
 
-Date: 2018-06-01
 
 See: [`config_file_example.sh`](examples/config_file_example.sh) for a detailed prototype code.
 
@@ -28,6 +60,7 @@ The idea is to store arguments parsed result into a shell env variable, and to r
 `docopts` sub-call with action expecting this variable to be filled with JSON output.
 
 ### Usage examples
+With a go workspace.
 
 ```bash
 DOCOPTS_JSON=$(docopts --json --h "Usage: mystuff [--code] INFILE [--out=OUTFILE]" : "$@")
@@ -39,7 +72,6 @@ then
 fi
 ```
 
-The var name could be explicitly set to any user need (instead of default `DOCOPTS_JSON`):
 
 ```bash
 docopts --env SOME_DOCOPTS_JSON get --code
@@ -66,56 +98,4 @@ DOCOPTS_JSON=$(docopts --json --auto-parse "$0" --version '0.1.1rc' : "$@")
 
 ## Developpers
 
-If you want to clone this repository and hack docopts:
-
-Use `git clone --recursive`, to get submodules only required for testing with `bats`.
-
-Fetch the extra golang version of `docopt` (required for building `docopts`)
-
-```bash
-go get github.com/docopt/docopt-go
-```
-
-If you forgot `--recursive`, you can also run afterward:
-
-~~~bash
-git submodule init
-git submodule update
-~~~
-
-## Tests
-
-Some tests are coded along this code base.
-
-- bats bash unit tests and functionnal testing
-- `language_agnostic_tester.py` (old python wrapper, full docopt compatibily tests)
-- See Also: docopt.go own tests in golang
-- `docopts_test.go` go unit test for `docopts.go`
-
-### Runing tests
-
-#### bats
-```
-cd ./tests
-. bats.alias
-bats .
-```
-
-#### `language_agnostic_tester`
-
-```
-python language_agnostic_tester.py ./testee.sh
-```
-
-#### golang docopt.go (golang parser lib)
-
-```
-cd PATH/to/go/src/github.com/docopt/docopt-go/
-go test -v .
-```
-
-#### golang docopts (our bash wrapper)
-
-```
-go test -v
-```
+See branch docpot-go
