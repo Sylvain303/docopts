@@ -6,7 +6,6 @@ package main
 
 import (
     "testing"
-    "reflect"
     "strings"
     "bytes"
     "errors"
@@ -73,8 +72,7 @@ func TestIsArray(t *testing.T) {
     }
 
     for _, table := range tables {
-        rt := reflect.TypeOf(table.input)
-        res := IsArray(rt)
+        res := IsArray(table.input)
         if res != table.expect {
            t.Errorf("IsArray for '%v', got: %v, want: %v.", table.input, res, table.expect)
         }
@@ -128,11 +126,12 @@ func TestPrint_bash_assoc(t *testing.T) {
         Global_prefix: "",
         Mangle_key: true,
         Output_declare: true,
+        Assoc_name: "args",
     }
 
     tables, _ := test_json_loader.Load_json("./common_input_test.json")
     for _, table := range tables {
-        d.Print_bash_assoc("args", table.Input)
+        d.Print_bash_assoc(table.Input)
         res := out.(*bytes.Buffer).String()
         expect := strings.Join(table.Expect_args[:],"\n") + "\n"
         if res != expect {

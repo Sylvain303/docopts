@@ -16,6 +16,7 @@ import (
     "io/ioutil"
     "sort"
     "encoding/json"
+    "bufio"
 )
 
 var Version string = `docopts 0.6.4 - with JSON support
@@ -26,25 +27,26 @@ This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.
 `
 
-var Usage string = `Shell interface for docopt, the CLI description language.
+var Usage string = `bug auto-parse with extra options
 
 Usage:
   docopts [options] -h <msg> : [<argv>...]
-  docopts [options] [--no-declare] -A <name>   -h <msg> : [<argv>...]
-  docopts [options] -G <prefix>  -h <msg> : [<argv>...]
-  docopts [options] --no-mangle  -h <msg> : [<argv>...]
+  docopts [options] [--no-declare] -A <name> -h <msg> : [<argv>...]
+  docopts [options] [-G <prefix>] [--no-mangle] -h <msg> : [<argv>...]
   docopts [options] parse <msg> : [<argv>...]
   docopts [options] get <arg_name>
   docopts [options] get-keys
-  docopts [options] auto-parse [--json|-A <name>|-G <prefix>] <bash_script> : [<argv>...]
+  docopts [options] auto-parse [--json|-A <name>|-G <prefix>] <filename> -- [<argv>...]
   docopts [options] merge (ini|json)  <config_file>
   docopts [options] dump  (ini|json)
   docopts --howto
 
 Actions:
-  parse          Parse and outputs JSON result (shortcut for --json -h).
-  auto-parse     Auto parse <bash_script> header and outputs parsed result.
-  get            With DOCOPTS_JSON, get the value of <arg_name>
+  parse          Parse and outputs JSON result (shortcut for --json -h <msg>).
+  auto-parse     Auto parse <filename> header and outputs parsed result
+                 default output: json.
+                 Warning: that <arg> separator is -- (ending option parsing).
+  get            With DOCOPTS_JSON, get the value of <arg_name>.
   fail           With DOCOPTS_JSON, set output the bash code with
                  error message, suitable for eval.
   merge          With DOCOPTS_JSON, output a new merge JSON reading
@@ -127,15 +129,16 @@ type Docopts struct {
     Exit_function bool
     Format DumpType
     Json string
+    Indent bool
+    Assoc_name string
 }
 
 func (d* Docopts) debug_print_Docopts() {
     fmt.Printf("Docopts: %+v\n", d)
-
 }
 
 // output bash 4 compatible assoc array, suitable for eval.
-func (d *Docopts) Print_bash_assoc(bash_assoc string, args docopt.Opts) {
+func (d *Docopts) Print_bash_assoc(args docopt.Opts) {
     // Reuse python's fake nested Bash arrays for repeatable arguments with values.
     // The structure is:
     // bash_assoc[key,#]=length
@@ -144,42 +147,48 @@ func (d *Docopts) Print_bash_assoc(bash_assoc string, args docopt.Opts) {
     // length can be 0, for empty array
 
     if d.Output_declare {
-        fmt.Fprintf(out, "declare -A %s\n" ,bash_assoc)
+        fmt.Fprintf(out, "declare -A %s\n" , d.Assoc_name)
     }
 
     for key, value := range args {
-        // some golang tricks here using reflection to loop over the map[]
-        rt := reflect.TypeOf(value)
-        if IsArray(rt) {
+        if IsArray(value) {
             // all array is outputed even 0 size
             val_arr := value.([]string)
             for index, v := range val_arr {
-                fmt.Fprintf(out, "%s['%s,%d']=%s\n", bash_assoc, Shellquote(key), index, To_bash(v))
+                fmt.Fprintf(out, "%s['%s,%d']=%s\n", d.Assoc_name, Shellquote(key), index, To_bash(v))
             }
             // size of the array
-            fmt.Fprintf(out, "%s['%s,#']=%d\n", bash_assoc, Shellquote(key), len(val_arr))
+            fmt.Fprintf(out, "%s['%s,#']=%d\n", d.Assoc_name, Shellquote(key), len(val_arr))
         } else {
             // value is not an array
-            fmt.Fprintf(out, "%s['%s']=%s\n", bash_assoc, Shellquote(key), To_bash(value))
+            fmt.Fprintf(out, "%s['%s']=%s\n", d.Assoc_name, Shellquote(key), To_bash(value))
         }
     }
 }
 
 func (d *Docopts) Print_value(key string) {
-    var parsed_args docopt.Opts
-    if len(d.Json) > 0 {
-        json.Unmarshal([]byte(d.Json), &parsed_args)
+    parsed_args, err := d.Get_DOCOPTS_JSON()
+    if err == nil {
         fmt.Fprintf(out, "%s\n", To_bash(parsed_args[key]))
     } else {
-        docopts_error(fmt.Sprintf("get '%s' DOCOPTS_JSON is empty", key), nil)
-
+        docopts_error(fmt.Sprintf("get '%s': %%s", key), err)
     }
 }
 
-func (d *Docopts) Print_keys() {
+// fetch DOCOPTS_JSON to JSON data sturcture
+func (d* Docopts) Get_DOCOPTS_JSON() (docopt.Opts, error) {
     var parsed_args docopt.Opts
+    // JSON string is loaded from env DOCOPTS_JSON in main()
     if len(d.Json) > 0 {
         json.Unmarshal([]byte(d.Json), &parsed_args)
+        return parsed_args, nil
+    }
+    return parsed_args, fmt.Errorf("Get_DOCOPTS_JSON '%s' is empty", "DOCOPTS_JSON")
+}
+
+func (d *Docopts) Print_keys() {
+    parsed_args, err := d.Get_DOCOPTS_JSON()
+    if err == nil {
         i := 0
         for k, _ := range parsed_args {
             if i > 0 {
@@ -189,12 +198,14 @@ func (d *Docopts) Print_keys() {
             i++
         }
     } else {
-        docopts_error("get-keys: DOCOPTS_JSON is empty", nil)
+        docopts_error("get-keys: %s", err)
     }
 }
 
 // Check if a value is an array
-func IsArray(rt reflect.Type) bool {
+func IsArray(value interface{}) bool {
+    // some golang tricks here using reflection to loop over the map[]
+    rt := reflect.TypeOf(value)
     if rt == nil {
         return false
     }
@@ -240,7 +251,17 @@ func To_bash(v interface{}) string {
     case nil:
         s = ""
     default:
-        panic(fmt.Sprintf("To_bash():unsuported type: %v for '%v'", reflect.TypeOf(v), v ))
+        // this test is when called with DOCOPTS_JSON from Print_value()
+        if IsArray(v) {
+            arr := v.([]interface{})
+            arr_out := make([]string, len(arr))
+            for i, e := range arr {
+                arr_out[i] = fmt.Sprintf("%v", e)
+            }
+            s = fmt.Sprintf("%s", strings.Join(arr_out[:],"\n"))
+        } else {
+            panic(fmt.Sprintf("To_bash():unsuported type: %v for '%v'", reflect.TypeOf(v), v ))
+        }
     }
 
     return s
@@ -392,15 +413,100 @@ func docopts_error(msg string, err error) {
 }
 
 func (d* Docopts) Dump(arguments docopt.Opts) {
+    var err error
+    var b []byte
+
     switch(d.Format) {
     case F_Json:
-        b, err := json.Marshal(arguments)
+        if d.Indent {
+            b, err = json.MarshalIndent(arguments, "", "  ")
+        } else {
+            b, err = json.Marshal(arguments)
+        }
         if err != nil {
             docopts_error("dump json: %v", err)
         }
         out.Write(b)
     case F_Ini:
-        fmt.Fprintf(out, "ini dump not supported yet")
+        docopts_error("ini dump not supported yet", nil)
+    }
+}
+
+// same as bash heler in docopts.sh docopt_get_help_string()
+// extract help string from the file
+func Get_help_string(filename string) []string {
+    file, err := os.Open(filename)
+    if err != nil {
+        docopts_error("Get_help_string: %s", err)
+    }
+    defer file.Close()
+    scanner := bufio.NewScanner(file)
+    found := false
+    re, _ := regexp.Compile(`^(#\s?)[Uu]sage:`)
+    prefix_l := 0
+    var lines []string
+    for scanner.Scan() {
+        l := scanner.Text()
+        if ! found {
+            res := re.FindStringSubmatch(l)
+            // check regexp match count
+            if len(res) == 2 {
+                found = true
+                prefix_l = len(res[1])
+            }
+        }
+        if found && l == "" {
+            break
+        }
+        if found {
+            if prefix_l < len(l) {
+                lines = append(lines, l[prefix_l:])
+            } else {
+                lines = append(lines, "")
+            }
+        }
+    }
+
+    if err := scanner.Err(); err != nil {
+        docopts_error("Get_help_string:scanner error: %s", err)
+    }
+
+    return lines
+}
+
+func (d* Docopts) Check_output_format(arguments docopt.Opts) {
+    if arguments["parse"].(bool) || arguments["--json"].(bool) {
+        d.Format = F_Json
+        return
+    } else if name, err := arguments.String("-A"); err == nil {
+        if ! IsBashIdentifier(name) {
+            docopts_error("-A switch:%v", fmt.Errorf("not a valid Bash identifier: '%s'", name))
+        }
+        d.Format = F_Bash_assoc
+        d.Output_declare = ! arguments["--no-declare"].(bool)
+        d.Assoc_name = name
+        return
+    } else {
+        d.Format = F_Bash_global
+        d.Mangle_key = ! arguments["--no-mangle"].(bool)
+        if global_prefix, err := arguments.String("-G"); err == nil {
+            d.Global_prefix = global_prefix
+        }
+        return
+    }
+
+    // default
+    d.Format = F_Json
+}
+
+func (d* Docopts) Dumper(bash_args docopt.Opts) {
+    switch d.Format {
+    case F_Json:
+        d.Dump(bash_args)
+    case F_Bash_assoc:
+        d.Print_bash_assoc(bash_args)
+    case F_Bash_global:
+        d.Print_bash_global(bash_args)
     }
 }
 
@@ -432,6 +538,8 @@ func main() {
         Exit_function: false,
         Format: F_Json,
         Json:  os.Getenv("DOCOPTS_JSON"),
+        Indent: false,
+        Assoc_name: "",
     }
 
     // parse docopts's own arguments
@@ -482,7 +590,12 @@ func main() {
     if debug {
         fmt.Printf("%20s : %v\n", "doc", doc)
         fmt.Printf("%20s : %v\n", "bash_version", bash_version)
+        d.debug_print_Docopts()
     }
+
+    // ================================================================================
+    // docopts JSON action modes
+    // ================================================================================
 
     if arguments["get"].(bool) {
         d.Print_value(arguments["<arg_name>"].(string))
@@ -494,10 +607,28 @@ func main() {
         d.Print_keys()
         os.Exit(0)
     }
+
+    if arguments["dump"].(bool) {
+        if arguments["json"].(bool) {
+            d.Format = F_Json
+            d.Indent = true
+        } else if arguments["ini"].(bool) {
+            d.Format = F_Ini
+        }
+        if parsed_args, err := d.Get_DOCOPTS_JSON(); err == nil {
+            d.Dump(parsed_args)
+        }
+        os.Exit(0)
+    }
+
+    if arguments["auto-parse"].(bool) {
+        help_string := Get_help_string(arguments["<filename>"].(string))
+        doc = strings.Join(help_string[:], "\n")
+    }
+
 	// ================================================================================
 	// need to parse arguments after this point
 	// ================================================================================
-
 
     // now parses bash program's arguments
     parser := &docopt.Parser{
@@ -512,7 +643,7 @@ func main() {
     }
 
     // ========================================
-    // main action code
+    // arguments parsing modes
     // ========================================
 
     if debug {
@@ -520,39 +651,9 @@ func main() {
         fmt.Println("----------------------------------------")
     }
 
-    if arguments["dump"].(bool) {
-        if arguments["json"].(bool) {
-            d.Format = F_Json
-        } else if arguments["ini"].(bool) {
-            d.Format = F_Ini
-        }
-        d.Dump(bash_args)
-        os.Exit(0)
-    }
-
     // outputer
-
-    if name, err := arguments.String("-A"); err == nil {
-        if ! IsBashIdentifier(name) {
-            docopts_error("-A switch:%v", fmt.Errorf("not a valid Bash identifier: '%s'", name))
-        }
-        d.Format = F_Bash_assoc
-        d.Output_declare = ! arguments["--no-declare"].(bool)
-        d.Print_bash_assoc(name, bash_args)
-    }
-
-    if arguments["parse"].(bool) {
-        // force option
-        d.Format = F_Json
-        d.Dump(bash_args)
-    } else {
-        d.Format = F_Bash_global
-        d.Mangle_key = ! arguments["--no-mangle"].(bool)
-        if global_prefix, err := arguments.String("-G"); err == nil {
-            d.Global_prefix = global_prefix
-        }
-        d.Print_bash_global(bash_args)
-    }
+    d.Check_output_format(arguments)
+    d.Dumper(bash_args)
 
     os.Exit(0)
 }
