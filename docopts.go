@@ -19,7 +19,7 @@ import (
     "bufio"
 )
 
-var Version string = `docopts 0.6.4 - with JSON support
+var Docopts_Version string = `docopts 0.6.4 - with JSON support
 Copyleft (Ɔ) 2018 Sylvain Viart (golang version).
 Copyright (C) 2013 Vladimir Keleshev, Lari Rasku.
 License MIT <http://opensource.org/licenses/MIT>.
@@ -95,6 +95,7 @@ Options:
 // testing trick, out can be mocked to catch stdout and validate
 // https://stackoverflow.com/questions/34462355/how-to-deal-with-the-fmt-golang-library-package-for-cli-testing
 var out io.Writer = os.Stdout
+var DEBUG bool
 
 type DumpType uint
 
@@ -131,6 +132,9 @@ type Docopts struct {
     Json string
     Indent bool
     Assoc_name string
+    Usage string
+    Bash_Version string
+    Separator string
 }
 
 func (d* Docopts) debug_print_Docopts() {
@@ -380,7 +384,7 @@ func HelpHandler_golang(err error, usage string) {
                 os.Exit(0)
             }
             if err_str[0:2] == "-V" || err_str[0:9] == "--version" {
-                fmt.Println(strings.TrimSpace(Version))
+                fmt.Println(strings.TrimSpace(Docopts_Version))
                 os.Exit(0)
             }
         }
@@ -510,6 +514,32 @@ func (d* Docopts) Dumper(bash_args docopt.Opts) {
     }
 }
 
+func (d* Docopts) Read_Doc_Version_from_stdin() {
+    // read from stdin
+    if d.Usage == "-" && d.Bash_Version == "-" {
+        bytes, _ := ioutil.ReadAll(os.Stdin)
+        arr := strings.Split(string(bytes), d.Separator)
+        if len(arr) == 2 {
+            d.Usage, d.Bash_Version = arr[0], arr[1]
+        } else {
+            msg := "error: help + version stdin, not found"
+            if DEBUG {
+                msg += fmt.Sprintf("\nseparator is: '%s'\n", d.Separator)
+                msg += fmt.Sprintf("spliting has given %d blocs, exactly 2 are expected\n", len(arr))
+            }
+            panic(msg)
+        }
+    } else if d.Usage == "-" {
+        bytes, _ := ioutil.ReadAll(os.Stdin)
+        d.Usage = string(bytes)
+    } else if d.Bash_Version == "-" {
+        bytes, _ := ioutil.ReadAll(os.Stdin)
+        d.Bash_Version = string(bytes)
+    }
+    d.Usage = strings.TrimSpace(d.Usage)
+    d.Bash_Version = strings.TrimSpace(d.Bash_Version)
+}
+
 func main() {
     golang_parser := &docopt.Parser{
       OptionsFirst: true,
@@ -517,15 +547,15 @@ func main() {
       HelpHandler: HelpHandler_golang,
     }
 
-    arguments, err_parse := golang_parser.ParseArgs(Usage, nil, Version)
+    arguments, err_parse := golang_parser.ParseArgs(Usage, nil, Docopts_Version)
 
     if err_parse != nil {
         msg := fmt.Sprintf("mypanic: %v\n", err_parse)
         panic(msg)
     }
 
-    debug := arguments["--debug"].(bool)
-    if debug {
+    DEBUG := arguments["--debug"].(bool)
+    if DEBUG {
         print_args(arguments, "golang")
     }
 
@@ -546,50 +576,27 @@ func main() {
     argv := arguments["<argv>"].([]string)
     options_first := arguments["--options-first"].(bool)
     no_help :=  arguments["--no-help"].(bool)
-    separator := arguments["--separator"].(string)
-
-    var doc string
+    d.Separator = arguments["--separator"].(string)
     var err error
-    // bash_version will be empty if error, so we dont care
-    bash_version, _ := arguments.String("--version")
 
-    if doc, err = arguments.String("--help"); err != nil {
-        // read from stdin
-        if doc == "-" && bash_version == "-" {
-            bytes, _ := ioutil.ReadAll(os.Stdin)
-            arr := strings.Split(string(bytes), separator)
-            if len(arr) == 2 {
-                doc, bash_version = arr[0], arr[1]
-            } else {
-                msg := "error: help + version stdin, not found"
-                if debug {
-                    msg += fmt.Sprintf("\nseparator is: '%s'\n", separator)
-                    msg += fmt.Sprintf("spliting has given %d blocs, exactly 2 are expected\n", len(arr))
-                }
-                panic(msg)
-            }
-        } else if doc == "-" {
-            bytes, _ := ioutil.ReadAll(os.Stdin)
-            doc = string(bytes)
-        } else if bash_version == "-" {
-            bytes, _ := ioutil.ReadAll(os.Stdin)
-            bash_version = string(bytes)
-        }
-        doc = strings.TrimSpace(doc)
-        bash_version = strings.TrimSpace(bash_version)
+    // d.Bash_Version will be empty if error, so we dont care about error
+    d.Bash_Version, _ = arguments.String("--version")
+    d.Usage, err = arguments.String("--help")
+    if err == nil && d.Usage == "-" {
+        d.Read_Doc_Version_from_stdin()
     }
 
-    // mode parse read from another arg
-    if doc == "" && arguments["parse"].(bool) {
-        doc, err = arguments.String("<msg>")
+    // mode parse: read from another arg
+    if d.Usage == "" && arguments["parse"].(bool) {
+        d.Usage, err = arguments.String("<msg>")
         if err != nil {
             panic(err)
         }
     }
 
-    if debug {
-        fmt.Printf("%20s : %v\n", "doc", doc)
-        fmt.Printf("%20s : %v\n", "bash_version", bash_version)
+    if DEBUG {
+        fmt.Printf("%20s : %v\n", "doc", d.Usage)
+        fmt.Printf("%20s : %v\n", "bash_version", d.Bash_Version)
         d.debug_print_Docopts()
     }
 
@@ -623,7 +630,7 @@ func main() {
 
     if arguments["auto-parse"].(bool) {
         help_string := Get_help_string(arguments["<filename>"].(string))
-        doc = strings.Join(help_string[:], "\n")
+        d.Usage = strings.Join(help_string[:], "\n")
     }
 
 	// ================================================================================
@@ -637,7 +644,7 @@ func main() {
       SkipHelpFlags: no_help,
     }
 
-    bash_args, err_parse_bash := parser.ParseArgs(doc, argv, bash_version)
+    bash_args, err_parse_bash := parser.ParseArgs(d.Usage, argv, d.Bash_Version)
     if err_parse_bash != nil {
         panic(err_parse_bash)
     }
@@ -646,7 +653,7 @@ func main() {
     // arguments parsing modes
     // ========================================
 
-    if debug {
+    if DEBUG {
         print_args(bash_args, "bash")
         fmt.Println("----------------------------------------")
     }

@@ -1,7 +1,8 @@
-# current work in PROGRRESS
+# current work in PROGRRESS json-api
 
-finish examples/
-make repository cleanup
+argument api change compatibility
+
+`auto-parse --json`
 
 # next
 

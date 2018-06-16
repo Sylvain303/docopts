@@ -12,7 +12,10 @@ See [API_proposal.md](API_proposal.md)
 
 ## build and publish binary
 
-reuse build.sh to build golang binary and pubilsh it as a new release too.
+Makefile OK
+publish it as a new release too.
+https://docs.travis-ci.com/user/deployment/releases/
+https://blog.questionable.services/article/build-go-binaries-travis-ci-github/
 
 ## generate bash completion from usage
 
