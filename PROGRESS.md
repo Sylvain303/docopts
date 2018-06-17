@@ -4,6 +4,28 @@ argument api change compatibility
 
 `auto-parse --json`
 
+
+add to functionnal testing :
+
+
+add `Preprocess_agrv` => before + bash
+
+with + without ':' (test true)
+with empty args => print help ??
+
+OK
+```
+echo "usage: prog" | ./docopts parse - --debug --
+```
+
+KO
+```
+echo "usage: prog" | ./docopts -h - --debug :
+```
+
+
+
+
 # next
 
 ## CI

@@ -12,6 +12,7 @@ import (
     // our json loader for common_input_test.json
     "github.com/Sylvain303/docopts/test_json_load"
     "fmt"
+    "reflect"
 )
 
 func TestShellquote(t *testing.T) {
@@ -375,5 +376,38 @@ func TestDump(t *testing.T) {
            t.Errorf("Dump json for '%v'\ngot : '%v'\nwant: '%v'\n", table.input, res, table.expect)
         }
         out.(*bytes.Buffer).Reset()
+    }
+}
+
+func TestPreprocess_agrv(t *testing.T) {
+    tables := []struct{
+        input []string
+        expect_before []string
+        expect_bash []string
+    }{
+       {
+           []string{"prog", "arg", "--var", ":", "next1", "next2"},
+           []string{"prog", "arg", "--var", ":"},
+           []string{"next1", "next2"},
+       },
+       {
+           []string{"-h", "-", "--debug", ":"},
+           []string{"-h", "-", "--debug", ":"},
+           // empty not nil []string
+           []string{},
+
+       },
+    }
+    for _, table := range tables {
+        before, bash := Preprocess_agrv(table.input)
+        before_compare := reflect.DeepEqual(before, table.expect_before)
+        bash_compare := reflect.DeepEqual(bash, table.expect_bash)
+        if before_compare == false || bash_compare == false {
+            msg := fmt.Sprintf("Preprocess_agrv '%v'\n", table.input)
+            msg += fmt.Sprintf("got before_compare:%v bash_compare:%v\n", before_compare, bash_compare)
+            msg += fmt.Sprintf("  before: '%+v' => want: '%+v'\n", before, table.expect_before)
+            msg += fmt.Sprintf("  bash  : '%+v' => want: '%+v'\n", bash, table.expect_bash)
+            t.Error(msg)
+        }
     }
 }

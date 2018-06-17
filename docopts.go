@@ -19,7 +19,7 @@ import (
     "bufio"
 )
 
-var Docopts_Version string = `docopts 0.6.4 - with JSON support
+var Docopts_Version string = `docopts 0.7.0 - with JSON support
 Copyleft (Ɔ) 2018 Sylvain Viart (golang version).
 Copyright (C) 2013 Vladimir Keleshev, Lari Rasku.
 License MIT <http://opensource.org/licenses/MIT>.
@@ -33,7 +33,7 @@ Usage:
   docopts [options] -h <msg> : [<argv>...]
   docopts [options] [--no-declare] -A <name> -h <msg> : [<argv>...]
   docopts [options] [-G <prefix>] [--no-mangle] -h <msg> : [<argv>...]
-  docopts [options] parse <msg> : [<argv>...]
+  docopts [options] parse <msg> -- [<argv>...]
   docopts [options] get <arg_name>
   docopts [options] get-keys
   docopts [options] auto-parse [--json|-A <name>|-G <prefix>] <filename> -- [<argv>...]
@@ -138,7 +138,12 @@ type Docopts struct {
 }
 
 func (d* Docopts) debug_print_Docopts() {
-    fmt.Printf("Docopts: %+v\n", d)
+    enc := json.NewEncoder(os.Stdout)
+    enc.SetIndent("", "    ")
+    enc.SetEscapeHTML(false)
+
+    fmt.Println("================ Docopts: =================")
+	enc.Encode(d)
 }
 
 // output bash 4 compatible assoc array, suitable for eval.
@@ -540,14 +545,36 @@ func (d* Docopts) Read_Doc_Version_from_stdin() {
     d.Bash_Version = strings.TrimSpace(d.Bash_Version)
 }
 
+// split argv on colon ':' for old -h <msg> option format and OptionsFirst = false
+// before_colon contains ':'
+func Preprocess_agrv(argv []string) (before_colon []string, bash_argv []string) {
+    // empty not nil array
+    bash_argv = []string{}
+    found_colon := false
+    for _, v := range argv {
+        if found_colon {
+            bash_argv = append(bash_argv, v)
+            continue
+        }
+
+        if v == ":" {
+            found_colon = true
+        }
+        before_colon = append(before_colon, v)
+    }
+    return
+}
+
 func main() {
     golang_parser := &docopt.Parser{
-      OptionsFirst: true,
+      OptionsFirst: false,
       SkipHelpFlags: true,
       HelpHandler: HelpHandler_golang,
     }
 
-    arguments, err_parse := golang_parser.ParseArgs(Usage, nil, Docopts_Version)
+    argv, bash_argv := Preprocess_agrv(os.Args[1:])
+
+    arguments, err_parse := golang_parser.ParseArgs(Usage, argv, Docopts_Version)
 
     if err_parse != nil {
         msg := fmt.Sprintf("mypanic: %v\n", err_parse)
@@ -573,7 +600,6 @@ func main() {
     }
 
     // parse docopts's own arguments
-    argv := arguments["<argv>"].([]string)
     options_first := arguments["--options-first"].(bool)
     no_help :=  arguments["--no-help"].(bool)
     d.Separator = arguments["--separator"].(string)
@@ -591,12 +617,21 @@ func main() {
         d.Usage, err = arguments.String("<msg>")
         if err != nil {
             panic(err)
+        } else if d.Usage == "-" {
+            d.Read_Doc_Version_from_stdin()
         }
+    }
+
+    if ! arguments[":"].(bool) {
+        // for non ':' colon new action arguments are in <argv>
+        bash_argv = arguments["<argv>"].([]string)
     }
 
     if DEBUG {
         fmt.Printf("%20s : %v\n", "doc", d.Usage)
         fmt.Printf("%20s : %v\n", "bash_version", d.Bash_Version)
+        fmt.Printf("%20s : %v\n", "argv", argv)
+        fmt.Printf("%20s : %v\n", "bash_argv", bash_argv)
         d.debug_print_Docopts()
     }
 
@@ -644,7 +679,7 @@ func main() {
       SkipHelpFlags: no_help,
     }
 
-    bash_args, err_parse_bash := parser.ParseArgs(d.Usage, argv, d.Bash_Version)
+    bash_args, err_parse_bash := parser.ParseArgs(d.Usage, bash_argv, d.Bash_Version)
     if err_parse_bash != nil {
         panic(err_parse_bash)
     }
