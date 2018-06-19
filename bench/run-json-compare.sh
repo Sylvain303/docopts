@@ -32,8 +32,10 @@ pathrm() {
 
 DOCOPTS_GOPATH=$(dirname $(readlink -f $0))/..
 pathadd $DOCOPTS_GOPATH
+which docopts
 ./timing.sh ../examples/arguments_example.sh
 ./timing.sh ../examples/old_docopts_api/arguments_example.sh
 pathrm $DOCOPTS_GOPATH
 pathadd  $HOME/code/docopt/docopts
+which docopts
 ./timing.sh ../examples/old_docopts_api/arguments_example.sh
