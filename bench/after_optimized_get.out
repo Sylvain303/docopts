@@ -1,0 +1,8 @@
+/home/sylvain/code/go/src/github.com/Sylvain303/docopts/bench/../docopts
+running: ../examples/arguments_example.sh
+58.422 ms output: 8 /dev/shm/timing_29245.out
+running: ../examples/old_docopts_api/arguments_example.sh
+26.143 ms output: 9 /dev/shm/timing_29300.out
+/home/sylvain/code/docopt/docopts/docopts
+running: ../examples/old_docopts_api/arguments_example.sh
+30.423 ms output: 9 /dev/shm/timing_29322.out

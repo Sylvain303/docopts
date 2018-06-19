@@ -562,6 +562,15 @@ func Preprocess_agrv(argv []string) (before_colon []string, bash_argv []string) 
 }
 
 func main() {
+    // optimize get no docopt parsing
+    if os.Args[1] == "get" {
+        d := &Docopts{
+            Json:  os.Getenv("DOCOPTS_JSON"),
+        }
+        d.Print_value(os.Args[2])
+        os.Exit(0)
+    }
+
     golang_parser := &docopt.Parser{
       OptionsFirst: false,
       SkipHelpFlags: true,

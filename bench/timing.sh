@@ -3,8 +3,7 @@
 # float computation US number format
 export LANG=C
 
-tmpf=/dev/shm/timing.out
-rm -f $tmpf
+tmpf=/dev/shm/timing_$$.out
 START=$(date +%s.%N)
 # do something #######################
 echo "running: $@"
