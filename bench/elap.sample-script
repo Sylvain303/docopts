@@ -1,0 +1,18 @@
+#!/bin/bash
+
+. elap.bash-v2 trap
+
+for ((i=3;i--;));do sleep .1;done
+
+elapCalc2
+elapShowTotal \\e[1mfirst total\\e[0m
+
+for ((i=2;i--;))
+do
+    tar -cf /tmp/test.tar -C / bin
+    gzip /tmp/test.tar
+    rm /tmp/test.tar.gz
+done
+
+trap -- debug
+elapTotal \\e[1mtotal time\\e[0m

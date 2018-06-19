@@ -1,0 +1,9 @@
+#!/bin/bash
+for ((i=3;i--;));do sleep .1;done
+
+for ((i=2;i--;))
+do
+    tar -cf /tmp/test.tar -C / bin
+    gzip /tmp/test.tar
+    rm /tmp/test.tar.gz
+done
