@@ -34,11 +34,12 @@ Usage:
   docopts [options] [--no-declare] -A <name> -h <msg> : [<argv>...]
   docopts [options] [-G <prefix>] [--no-mangle] -h <msg> : [<argv>...]
   docopts [options] parse <msg> -- [<argv>...]
-  docopts [options] get <arg_name>
+  docopts [options] get -- <arg_name>
   docopts [options] get-keys
   docopts [options] auto-parse [--json|-A <name>|-G <prefix>] <filename> -- [<argv>...]
   docopts [options] merge (ini|json)  <config_file>
   docopts [options] dump  (ini|json)
+  docopts [options] fail
   docopts --howto
 
 Actions:
@@ -367,7 +368,7 @@ func (d *Docopts) HelpHandler_for_bash_eval (err error, usage string) {
     } else {
         // --help or --version found and --no-help was not given
         fmt.Printf("echo '%s'\n%s\n", Shellquote(usage), d.Get_exit_code(0))
-        os.Exit(0)
+        os.Exit(2)
     }
 }
 
@@ -486,7 +487,6 @@ func Get_help_string(filename string) []string {
 func (d* Docopts) Check_output_format(arguments docopt.Opts) {
     if arguments["parse"].(bool) || arguments["--json"].(bool) {
         d.Format = F_Json
-        return
     } else if name, err := arguments.String("-A"); err == nil {
         if ! IsBashIdentifier(name) {
             docopts_error("-A switch:%v", fmt.Errorf("not a valid Bash identifier: '%s'", name))
@@ -494,18 +494,14 @@ func (d* Docopts) Check_output_format(arguments docopt.Opts) {
         d.Format = F_Bash_assoc
         d.Output_declare = ! arguments["--no-declare"].(bool)
         d.Assoc_name = name
-        return
-    } else {
+    } else if global_prefix, err := arguments.String("-G"); err == nil {
+        d.Global_prefix = global_prefix
         d.Format = F_Bash_global
         d.Mangle_key = ! arguments["--no-mangle"].(bool)
-        if global_prefix, err := arguments.String("-G"); err == nil {
-            d.Global_prefix = global_prefix
-        }
-        return
+    } else {
+        // force default as JSON
+        d.Format = F_Json
     }
-
-    // default
-    d.Format = F_Json
 }
 
 func (d* Docopts) Dumper(bash_args docopt.Opts) {
@@ -639,6 +635,11 @@ func main() {
     // docopts JSON action modes
     // ================================================================================
 
+    if arguments["fail"].(bool) {
+        fmt.Println(d.Json)
+        os.Exit(0)
+    }
+
     if arguments["get"].(bool) {
         d.Print_value(arguments["<arg_name>"].(string))
         os.Exit(0)
@@ -666,6 +667,7 @@ func main() {
     if arguments["auto-parse"].(bool) {
         help_string := Get_help_string(arguments["<filename>"].(string))
         d.Usage = strings.Join(help_string[:], "\n")
+        d.Format = F_Json
     }
 
 	// ================================================================================

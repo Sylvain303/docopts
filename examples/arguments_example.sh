@@ -1,7 +1,8 @@
 #!/bin/bash
 #
-# Usage: arguments_example.sh [-vqrh] [FILE] ...
-#           arguments_example.sh (--left | --right) CORRECTION FILE
+# Usage:
+#   arguments_example.sh [-vqrh] [FILE] ...
+#   arguments_example.sh (--left | --right) CORRECTION FILE
 #
 # Process FILE and optionally apply correction to either left-hand side or
 # right-hand side.
@@ -20,14 +21,15 @@
 #
 
 # if docopts is in PATH, not needed.
-# Note: docopts.sh is also found in PATH
 PATH=..:$PATH
-# auto parse the header above, See: docopt_get_help_string
-source docopts.sh --auto "$@"
 
-# docopt_auto_parse use ARGS bash 4 globla assoc array
+# auto parse the header above, See: docopt_get_help_string
+# docopt_auto_parse use DOCOPTS_JSON exported global
+export DOCOPTS_JSON
+DOCOPTS_JSON=$(docopts auto-parse "$0" -- "$@")
+[[ $? -ne 0 ]] && eval "$DOCOPTS_JSON"
+
 # main code
-# on assoc array '!' before nane gike hash keys
-for a in ${!ARGS[@]} ; do
-    echo "$a = ${ARGS[$a]}"
+for a in $(docopts get-keys) ; do
+    echo "$a = $(docopts get -- "$a")"
 done

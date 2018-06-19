@@ -10,21 +10,23 @@ Published in the [docopts Wiki](https://github.com/docopt/docopts/wiki)
 
 Submit pull request for changes.
 
-## docopts go, with JSON support
+## docopts go, with JSON support
 Date: 2018-06-01
 
 See: [`config_file_example.sh`](examples/config_file_example.sh) for a detailed prototype code.
 
-We propose to embed JSON support into `docopts` (single binary, no need to extra `jq` for handling
-JSON in bash.
+We propose to embed JSON support into `docopts` (single binary, no need to extra `jq` for handling
+JSON in bash.
 
-The idea is to store arguments parsed result into a shell env variable, and to reuse it by 
+The idea is to store arguments parsed result into a shell env variable, and to reuse it by
 `docopts` sub-call with action expecting this variable to be filled with JSON output.
 
 ### Usage examples
 
 ```bash
-DOCOPTS_JSON=$(docopts --json --h "Usage: mystuff [--code] INFILE [--out=OUTFILE]" : "$@")
+# require to separate export and assignment to get $? after $()
+export DOCOPTS_JSON
+DOCOPTS_JSON=$(docopts parse "Usage: mystuff [--code] INFILE [--out=OUTFILE]" -- "$@")
 
 # automaticly use $DOCOPTS_JSON
 if [[ $(docopts get --code) == checkit ]]
@@ -52,7 +54,8 @@ docopts get --code
 `DOCOPTS_JSON` also contains exit code for the caller if necessary.
 
 ```bash
-DOCOPTS_JSON=$(docopts --json --auto-parse "$0" --version '0.1.1rc' : "$@")
+export DOCOPTS_JSON
+DOCOPTS_JSON=$(docopts auto-parse "$0" --version '0.1.1rc' -- "$@")
 # docopts fail : display error stored in DOCOPTS_JSON and output exit code for
 # caller
 [[ $? -ne 0 ]] && eval $(docopts fail)
