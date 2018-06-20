@@ -60,3 +60,27 @@ DOCOPTS_JSON=$(docopts auto-parse "$0" --version '0.1.1rc' -- "$@")
 # caller
 [[ $? -ne 0 ]] && eval $(docopts fail)
 ```
+
+### RPC support and session
+
+See: [examples/rpc_suppots_api_example.sh](examples/rpc_suppots_api_example.sh)
+
+`docopts` becomes an daemon program which interract with itself and the API looks like if it was part of bash language.
+
+
+```bash
+# create daemon RPC process
+docopts auto-parse --auto-fail "$0" --version '0.1.1rc' -- "$@"
+
+# all calls are using first call init
+docopts merge ini - <<< "$(output_ini_config)"
+docopts merge json - <<< "$(output_json_config)"
+
+docopts dump json
+
+for a in $(docopts get-keys); do
+  echo "$a = $(docopts get $a)"
+done
+
+docopts kill
+```
