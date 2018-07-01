@@ -4,6 +4,7 @@ import (
   "github.com/docopt/docopt-go"
   "fmt"
   "sort"
+  "os"
 )
 
 var Usage string = `
@@ -34,8 +35,21 @@ func print_args(args docopt.Opts, message string) {
     }
 }
 
+func MyHelpHandler(err error, usage string) {
+    if err != nil {
+        // fatal Error
+        fmt.Fprintf(os.Stderr, "my error: %v\n%v\n", err, usage)
+        os.Exit(1)
+    } else {
+        // no error, only call HelpHandler
+        fmt.Println(usage)
+        os.Exit(0)
+    }
+}
 func main() {
-    golang_parser := &docopt.Parser{}
+    golang_parser := &docopt.Parser{
+      HelpHandler: MyHelpHandler,
+    }
     arguments, err := golang_parser.ParseArgs(Usage, nil, "")
 
     if err != nil {
