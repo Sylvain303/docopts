@@ -75,9 +75,16 @@ make build_doc: `./docopts --help | get_usage`
 
 ```
   docopts [options] -h <msg> : [<argv>...]
-  docopts [options] [--no-declare] -A <name>   -h <msg> : [<argv>...]
-  docopts [options] -G <prefix>  -h <msg> : [<argv>...]
-  docopts [options] --no-mangle  -h <msg> : [<argv>...]
+  docopts [options] [--no-declare] -A <name> -h <msg> : [<argv>...]
+  docopts [options] [-G <prefix>] [--no-mangle] -h <msg> : [<argv>...]
+  docopts [options] parse <msg> -- [<argv>...]
+  docopts [options] get [--] <arg_name>
+  docopts [options] get-keys
+  docopts [options] auto-parse [--json|-A <name>|-G <prefix>] <filename> -- [<argv>...]
+  docopts [options] merge (ini|json)  <config_file>
+  docopts [options] dump  (ini|json)
+  docopts [options] fail
+  docopts --howto
 ```
 
 ## DESCRIPTION
@@ -185,6 +192,8 @@ Options:
                                 shellquoted. Extra parsing is required.
   --no-declare                  Don't output 'declare -A <name>', used only
                                 with -A argument.
+  --json                        Change output format to JSON. Activated
+                                automaticaly for 'parse' action.
   --debug                       Output extra parsing information for debugging.
                                 Output cannot be used in bash eval.
 ```
