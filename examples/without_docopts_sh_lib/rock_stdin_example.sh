@@ -4,8 +4,7 @@
 #
 
 # no need to change PATH if docopts binary is in PATH already
-PATH=..:$PATH
-source ../docopts.sh
+PATH=../..:$PATH
 
 # read both verion and usage from stdin
 # in global mode (option names arg mangled, See docopts --help

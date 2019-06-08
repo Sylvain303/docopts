@@ -34,7 +34,7 @@ Usage:
   docopts [options] [--no-declare] -A <name> -h <msg> : [<argv>...]
   docopts [options] [-G <prefix>] [--no-mangle] -h <msg> : [<argv>...]
   docopts [options] parse <msg> -- [<argv>...]
-  docopts [options] get -- <arg_name>
+  docopts [options] get [--] <arg_name>
   docopts [options] get-keys
   docopts [options] auto-parse [--json|-A <name>|-G <prefix>] <filename> -- [<argv>...]
   docopts [options] merge (ini|json)  <config_file>
@@ -77,19 +77,19 @@ Options:
   -H, --no-help                 Don't handle --help and --version specially.
   -A <name>                     Export the arguments as a Bash 4.x associative
                                 array called <name>.
-  -G <prefix>                   As without -A, but outputs Bash compatible
-                                GLOBAL varibles assignment, uses the given
-                                <prefix>_{option}={parsed_option}. Can be used
-                                with numerical incompatible option as well.
-                                See also: --no-mangle
+  -G <prefix>                   Don't use associative array but output
+                                Bash 3.x compatible GLOBAL variables assignment:
+                                  <prefix>_{mangled_args}={parsed_value}
+                                Can be used with numeric incompatible options
+                                as well.  See also: --no-mangle
   --no-mangle                   Output parsed option not suitable for bash eval.
-                                As without -A but full option names are kept.
-                                Rvalue is still shellquoted.
+                                Full option names are kept. Rvalue is still
+                                shellquoted. Extra parsing is required.
   --no-declare                  Don't output 'declare -A <name>', used only
                                 with -A argument.
   --json                        Change output format to JSON. Activated
                                 automaticaly for 'parse' action.
-  --debug                       Output extra parsing information for debuging.
+  --debug                       Output extra parsing information for debugging.
                                 Output cannot be used in bash eval.
 `
 
@@ -277,24 +277,35 @@ func To_bash(v interface{}) string {
     return s
 }
 
-// Performs output for bash Globals (not bash 4 assoc) Names are mangled to became
+// Performs output for bash Globals (not bash 4 assoc) Names are mangled to become
 // suitable for bash eval.
-// If Docopts.Mangle_key: false simply print left-hand side assignment verbatim.
+// If Docopts.Mangle_key is false: simply print left-hand side assignment verbatim.
 // used for --no-mangle
-func (d *Docopts) Print_bash_global(args docopt.Opts) {
+func (d *Docopts) Print_bash_global(args docopt.Opts) (error) {
     var new_name string
     var err error
     var out_buf string
 
-    // value is an interface{}
+    varmap := make(map[string]string)
+
+    // docopt.Opts is of type map[string]interface{}
+    // so value is an interface{}
     for key, value := range args {
         if d.Mangle_key {
             new_name, err = d.Name_mangle(key)
             if err != nil {
-                docopts_error("%v", err)
+                return err
             }
         } else {
             new_name = key
+        }
+
+        // test if already present in the map
+        prev_key, seen := varmap[new_name]
+        if seen {
+            return fmt.Errorf("%s: two or more elements have identically mangled names", prev_key)
+        } else {
+          varmap[new_name] = key
         }
 
         out_buf += fmt.Sprintf("%s=%s\n", new_name, To_bash(value))
@@ -302,6 +313,8 @@ func (d *Docopts) Print_bash_global(args docopt.Opts) {
 
     // final output
     fmt.Fprintf(out, "%s", out_buf)
+
+    return nil
 }
 
 // Transform a parsed option or place-holder name into a bash identifier if possible.
@@ -368,7 +381,8 @@ func (d *Docopts) HelpHandler_for_bash_eval (err error, usage string) {
     } else {
         // --help or --version found and --no-help was not given
         fmt.Printf("echo '%s'\n%s\n", Shellquote(usage), d.Get_exit_code(0))
-        os.Exit(2)
+        // this is an expected "error" and our exit status must be 0 for OK
+        os.Exit(0)
     }
 }
 
@@ -422,6 +436,7 @@ func docopts_error(msg string, err error) {
     os.Exit(1)
 }
 
+// JSON dumper
 func (d* Docopts) Dump(arguments docopt.Opts) {
     var err error
     var b []byte
@@ -484,6 +499,7 @@ func Get_help_string(filename string) []string {
     return lines
 }
 
+// bunch of tests for selecting the output format from passed options
 func (d* Docopts) Check_output_format(arguments docopt.Opts) {
     if arguments["parse"].(bool) || arguments["--json"].(bool) {
         d.Format = F_Json
@@ -499,19 +515,24 @@ func (d* Docopts) Check_output_format(arguments docopt.Opts) {
         d.Format = F_Bash_global
         d.Mangle_key = ! arguments["--no-mangle"].(bool)
     } else {
-        // force default as JSON
-        d.Format = F_Json
+        // force default
+        d.Format = F_Bash_global
     }
 }
 
+// select the function for dumping correct output
 func (d* Docopts) Dumper(bash_args docopt.Opts) {
+    var err error
     switch d.Format {
     case F_Json:
         d.Dump(bash_args)
     case F_Bash_assoc:
         d.Print_bash_assoc(bash_args)
     case F_Bash_global:
-        d.Print_bash_global(bash_args)
+        err = d.Print_bash_global(bash_args)
+        if err != nil {
+            docopts_error("Print_bash_global:%v", err)
+        }
     }
 }
 
@@ -565,9 +586,20 @@ func main() {
     // optimize get no docopt parsing
     if os.Args[1] == "get" {
         d := &Docopts{
-            Json:  os.Getenv("DOCOPTS_JSON"),
+            Json: os.Getenv("DOCOPTS_JSON"),
         }
-        d.Print_value(os.Args[2])
+        if len(d.Json) == 0 {
+            docopts_error("DOCOPTS_JSON undefined or empty", nil)
+        }
+
+        // pseudo argument parsing: ignores -- after 'get' if any
+        var key string
+        if len(os.Args) > 3 && os.Args[2] == "--" {
+            key = os.Args[3]
+        } else {
+            key = os.Args[2]
+        }
+        d.Print_value(key)
         os.Exit(0)
     }
 
@@ -649,6 +681,7 @@ func main() {
         os.Exit(0)
     }
 
+    // never reach with optimization at the beginning of main()
     if arguments["get"].(bool) {
         d.Print_value(arguments["<arg_name>"].(string))
         os.Exit(0)
@@ -689,6 +722,10 @@ func main() {
       OptionsFirst: options_first,
       SkipHelpFlags: no_help,
     }
+
+    // ========================================
+    // arguments parsing modes
+    // ========================================
 
     bash_args, err_parse_bash := parser.ParseArgs(d.Usage, bash_argv, d.Bash_Version)
     if err_parse_bash != nil {

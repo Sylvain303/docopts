@@ -1,23 +1,26 @@
-#!/usr/bin/env bash
-#
-# cat -n all files
-#
-# Usage: cat-n_wrapper_example.sh [--count=N] FILE...
-#
-# Arguments:
-#   FILE     input file
-# 
-# Options:
-#   --count=N   limit the number of line to display
-#
-# Examples:
-#    ./cat-n_wrapper.sh --count=3 cat-n_wrapper.sh  quick_example.sh 
-#
+
+usage() {
+  cat << EOU
+
+cat -n all files
+
+Usage: cat-n_wrapper_example.sh [--count=N] FILE...
+
+Arguments:
+  FILE     input file
+
+Options:
+  --count=N   limit the number of line to display
+
+Examples:
+   ./cat-n_wrapper.sh --count=3 cat-n_wrapper.sh  quick_example.sh 
+EOU
+}
+
 
 # no PATH changes required if docopts binary is in the PATH already
-PATH=..:$PATH
-source ../docopts.sh
-help=$(docopt_get_help_string $0)
+PATH=../..:$PATH
+help=$(usage)
 version='0.1'
 
 parsed=$(docopts -A args -h "$help" -V $version : "$@")

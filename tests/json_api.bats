@@ -4,7 +4,7 @@
 
 PATH=..:$PATH
 
-@test "parse" {
+@test "docopts parse" {
   run docopts parse "usage: pipo [-v] [--count=N] FILE..." -- pipoland deux "troisieme argument" ici "et la"
   echo "output=$output"
   [[ -n $output ]]
@@ -13,7 +13,7 @@ PATH=..:$PATH
   [[ $output == false ]]
 }
 
-@test "get" {
+@test "docopts get" {
   export DOCOPTS_JSON
   DOCOPTS_JSON=$(docopts parse "usage: pipo [-v] [--count=N] FILE..." -- pipoland deux "troisieme argument" ici "et la")
   echo $DOCOPTS_JSON
@@ -23,7 +23,7 @@ PATH=..:$PATH
   [[ ${#lines[@]} -eq 5 ]]
 }
 
-@test "get-keys" {
+@test "docopts get-keys" {
   export DOCOPTS_JSON=$(docopts parse "usage: pipo [-v] [--count=N] FILE..." -- pipoland deux "troisieme argument" ici "et la")
   echo $DOCOPTS_JSON
   run docopts get-keys
@@ -32,7 +32,7 @@ PATH=..:$PATH
   [[ ${#keys[@]} -eq 3 ]]
 }
 
-@test "dump" {
+@test "docopts dump" {
   export DOCOPTS_JSON=$(docopts parse "usage: pipo [-v] [--count=N] FILE..." -- pipoland deux "troisieme argument" ici "et la")
   echo $DOCOPTS_JSON
   run docopts dump json

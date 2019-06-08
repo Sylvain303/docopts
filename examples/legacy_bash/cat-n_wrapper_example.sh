@@ -6,21 +6,22 @@
 #
 # Arguments:
 #   FILE     input file
-# 
+#
 # Options:
 #   --count=N   limit the number of line to display
 #
 # Examples:
-#    ./cat-n_wrapper.sh --count=3 cat-n_wrapper.sh  quick_example.sh 
+#    ./cat-n_wrapper.sh --count=3 cat-n_wrapper.sh  quick_example.sh
 #
 
 # no PATH changes required if docopts binary is in the PATH already
-PATH=..:$PATH
-source ../docopts.sh
+PATH=../..:$PATH
+source ../../docopts.sh
 help=$(docopt_get_help_string $0)
 version='0.1'
 
-parsed=$(docopts -A args -h "$help" -V $version : "$@")
+parsed=$(docopts -G args -h "$help" -V $version : "$@")
+# Show parsed arguments
 #echo "$parsed"
 eval "$parsed"
 
